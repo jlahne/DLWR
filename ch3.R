@@ -40,3 +40,31 @@ x_test <- vectorize_sequences(test_data)
 y_train <- as.numeric(train_labels)
 y_test <- as.numeric(test_labels)
 
+model <- keras_model_sequential() %>%
+  layer_dense(units = 16, activation = "relu", input_shape = 10000) %>% 
+  layer_dense(units = 16, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+model %>%
+  compile(
+    optimizer = "rmsprop",
+    loss = "binary_crossentropy",
+    metrics = "accuracy"
+  )
+
+val_indices <- 1:10000
+x_val <- x_train[val_indices,]
+partial_x_train <- x_train[-val_indices,]
+y_val <- y_train[val_indices]
+partial_y_train <- y_train[-val_indices]
+
+history <- model %>% 
+  fit(
+    partial_x_train,
+    partial_y_train,
+    epochs = 4,
+    batch_size = 512,
+    validation_data = list(x_val, y_val)
+  )
+
+results <- model %>% evaluate(x_test, y_test)
