@@ -201,3 +201,105 @@ history <- catdog_model_2 %>%
     validation_steps = 15
   )
 
+# Pretrained models (VGG16) - restart R here
+
+rm(list = ls()); gc()
+library(keras)
+library(tidyverse)
+
+conv_base <- application_vgg16(
+  weights = "imagenet",
+  include_top = FALSE,
+  input_shape = c(150, 150, 3)
+)
+
+train_dir <- "~/Documents/R/Deep Learning with R/cats_and_dogs_small/train"
+validation_dir <- "~/Documents/R/Deep Learning with R/cats_and_dogs_small/validation"
+test_dir <- "~/Documents/R/Deep Learning with R/cats_and_dogs_small/test"
+
+train_cats_dir <- file.path(train_dir, "cats")
+train_dogs_dir <- file.path(train_dir, "dogs")
+test_cats_dir <- file.path(test_dir, "cats")
+test_dogs_dir <- file.path(test_dir, "dogs")
+validation_cats_dir <- file.path(test_dir, "cats")
+validation_dogs_dir <- file.path(test_dir, "dogs")
+
+extract_features <- function(directory, sample_count){
+
+  datagen <- image_data_generator(rescale = 1 / 255)
+  batch_size <- 20
+  
+  features <- array(0, dim = c(sample_count, 4, 4, 512))
+  labels <- array(0, dim = c(sample_count))
+  
+  generator <- flow_images_from_directory(
+    directory = directory,
+    generator = datagen,
+    target_size = c(150, 150),
+    batch_size = batch_size,
+    class_mode = "binary"
+  )
+  
+  i <- 0
+  while(TRUE){
+    batch <- generator_next(generator)
+    inputs_batch <- batch[[1]]
+    labels_batch <- batch[[2]]
+    features_batch <- conv_base %>% predict(inputs_batch)
+    
+    index_range <- ((i * batch_size) + 1):((i + 1) * batch_size)
+    features[index_range, , , ] <- features_batch
+    labels[index_range] <- labels_batch
+    
+    i <- i + 1
+    if(i * batch_size >= sample_count)
+      break
+  }
+  
+  list(features = features,
+       labels = labels)
+  
+}
+
+train <- extract_features(train_dir, 2000)
+validation <- extract_features(validation_dir, 1000)
+test <- extract_features(test_dir, 1000)
+
+reshape_features <- function(features){
+  array_reshape(features, dim = c(nrow(features), 4 * 4 * 512))
+}
+
+train$features <- reshape_features(train$features)
+validation$features <- reshape_features(validation$features)
+test$features <- reshape_features(test$features)
+
+model_cheapvgg <- keras_model_sequential() %>% 
+  layer_dense(units = 256, activation = "relu", input_shape = 4 * 4 * 512) %>% 
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = 1, activation = "sigmoid") %>% 
+  compile(
+    optimizer = optimizer_rmsprop(lr = 2e-5),
+    loss = loss_binary_crossentropy,
+    metrics = "acc"
+  )
+
+history <- model_cheapvgg %>% 
+  fit(
+    train$features,
+    train$labels,
+    epochs = 30,
+    batch_size = 20,
+    validation_data = list(validation$features, validation$labels)
+  )
+
+# The rest of the chapter requires methods that are computationally intractable without a GPU (apparently)
+
+
+
+
+
+
+
+
+
+
